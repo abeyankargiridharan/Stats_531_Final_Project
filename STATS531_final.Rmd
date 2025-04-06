@@ -1,0 +1,123 @@
+---
+title: "STATS 531 Final Project"
+output: html_document
+date: "2025-04-05"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(timeSeriesDataSets)
+```
+
+# Dataset 
+- Period: 2024-04-06 - 2025-04-05
+- CNN Fear & Greed Index
+- Bitcoin Close price
+
+```{r}
+install.packages("httr")
+install.packages("jsonlite")
+library(httr)
+library(jsonlite)
+
+# Call the API
+response <- GET("https://api.alternative.me/fng/?limit=1000")
+
+# Parse JSON content
+content_json <- content(response, as = "text", encoding = "UTF-8")
+fng_data <- fromJSON(content_json)
+
+# Convert the 'data' field to a data frame
+fng_df <- fng_data$data
+head(fng_df)
+
+fng_df$date <- as.POSIXct(as.numeric(fng_df$timestamp), origin = "1970-01-01", tz = "UTC")
+fng_df$value <- as.numeric(fng_df$value)
+
+fng_final <- fng_df[, c("date", "value")]
+names(fng_final) <- c("time", "FG")  # Rename for consistency
+head(fng_final)
+
+library(ggplot2)
+
+ggplot(fng_final, aes(x = time, y = FG)) +
+  geom_line(color = "steelblue") +
+  labs(
+    title = "CNN Fear & Greed Index Over Time",
+    x = "Date",
+    y = "Fear & Greed Index"
+  ) +
+  theme_minimal()
+
+nrow(fng_final)
+```
+ 
+```{r}
+
+# Define the start and end dates as POSIXct objects
+start_date <- as.POSIXct("2024-04-06", tz = "UTC")
+end_date   <- as.POSIXct("2025-04-06", tz = "UTC")
+
+# Subset the data
+fng_subset <- fng_final[fng_final$time >= start_date & fng_final$time <= end_date, ]
+
+# Check the first few rows of the subset
+head(fng_subset)
+
+# Plot the subsetted data
+library(ggplot2)
+ggplot(fng_subset, aes(x = time, y = FG)) +
+  geom_line(color = "steelblue") +
+  labs(
+    title = "CNN Fear & Greed Index (2024-04-06 to 2025-04-06)",
+    x = "Date",
+    y = "Fear & Greed Index"
+  ) +
+  theme_minimal()
+
+```
+
+After pre-processing, we have "merged_df" which contains date, FG index and bitcoin daily close prices ranging from 04/06/2024 to 04/05/2025. 
+
+```{r}
+# Read the bitcoin dataset (ensure strings are not converted to factors)
+bitcoin_ts <- read.csv('bitcoin_2024-04-06_2025-04-06.csv', stringsAsFactors = FALSE)
+
+# Convert the 'Start' column to a POSIXct date object 
+bitcoin_ts$Start <- as.POSIXct(bitcoin_ts$Start, format = "%Y-%m-%d", tz = "UTC")
+
+# Merge the F&G index dataset (fng_final) with the bitcoin dataset on matching dates
+merged_df <- merge(fng_final, bitcoin_ts, by.x = "time", by.y = "Start")
+
+# Select only the required columns and rename them:
+# "date" for the matching date, "fg_index" for the Fear & Greed Index, and "bitcoin_close" for the Bitcoin closing price.
+merged_df <- merged_df[, c("time", "FG", "Close")]
+names(merged_df) <- c("date", "fg_index", "bitcoin_close")
+
+# Check the first few rows of the merged data
+head(merged_df)
+
+```
+ 
+ 
+```{r}
+# First plot the FG Index with its y-axis (left)
+plot(merged_df$date, merged_df$fg_index, type = "l", col = "blue",
+     xlab = "Date", ylab = "FG Index", main = "FG Index and Bitcoin Price Over Time")
+
+# Overlay the Bitcoin closing price with a new plot
+par(new = TRUE)
+plot(merged_df$date, merged_df$bitcoin_close, type = "l", col = "red", 
+     axes = FALSE, xlab = "", ylab = "")
+# Add a right-side y-axis for Bitcoin
+axis(side = 4, col = "red", col.axis = "red")
+mtext("Bitcoin Close", side = 4, line = 3, col = "red")
+
+# Add a legend
+legend("topleft", legend = c("FG Index", "Bitcoin Close"), 
+       col = c("blue", "red"), lty = 1)
+
+
+```
+ 
+ 

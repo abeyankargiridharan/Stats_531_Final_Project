@@ -278,7 +278,8 @@ acf(FG_index, lag.max = 50, main = "ACF of Fear & Greed Index (Original)")
 acf(log_FG, lag.max = 50, main = "ACF of Log(Fear & Greed Index)")
 acf(diff_log_FG, lag.max = 50, main = "ACF of Differenced Log(FG Index)")
 ```
-# Simple Sotchastic Volatility Model
+
+# Simple Stochastic Volatility Model
 ### Local Search
 ```{r}
 library(pomp)

@@ -119,5 +119,41 @@ legend("topleft", legend = c("FG Index", "Bitcoin Close"),
 
 
 ```
+```{r}
+set.seed(1)
+
+# Assuming 'merged_df' is already available from your earlier code
+# with columns: date, fg_index, bitcoin_close
+# For consistency with your ETH example, rename columns to "Date" and "Price"
+bitcoin <- merged_df
+names(bitcoin) <- c("Date", "FG", "Price")
+
+# Convert the Date column to Date type (assuming it's in "YYYY-MM-DD" format)
+bitcoin$Date <- as.Date(bitcoin$Date)
+
+# Order the data by Date (if not already sorted)
+bitcoin <- bitcoin[order(bitcoin$Date), ]
+
+# Compute the continuously compounded log returns and demean them
+log_returns <- diff(log(bitcoin$Price))
+logd <- log_returns - mean(log_returns)
+
+# Plot the Bitcoin Price over time
+par(mai=c(0.8,0.8,0.1,0.1))
+plot(bitcoin$Price ~ bitcoin$Date, type="l",
+     xlab="Years", ylab="Bitcoin ($)",
+     main="Bitcoin Price Over Time")
+
+# Plot the logarithmic transformation of Bitcoin Price
+plot(log(bitcoin$Price) ~ bitcoin$Date, type="l",
+     xlab="Years", ylab="Log(Bitcoin Price)",
+     main="Log-Transformed Bitcoin Price")
+
+# Plot the demeaned log returns of Bitcoin
+# (Note: diff reduces the length by one, so use Date[-1])
+plot(bitcoin$Date[-1], logd, type="l",
+     xlab="Years", ylab="Demeaned Log Return",
+     main="Demeaned Log Returns of Bitcoin")
  
+```
  

@@ -1,0 +1,283 @@
+---
+title: "STATS 531 Final Project"
+output: html_document
+date: "2025-04-05"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(timeSeriesDataSets)
+```
+
+# Dataset 
+- Period: 2024-04-06 - 2025-04-05
+- CNN Fear & Greed Index
+- Bitcoin Close price
+
+```{r}
+options(repos = c(CRAN = "https://cloud.r-project.org"))
+install.packages("httr")
+install.packages("jsonlite")
+library(httr)
+library(jsonlite)
+
+# Call the API
+response <- GET("https://api.alternative.me/fng/?limit=1000")
+
+# Parse JSON content
+content_json <- content(response, as = "text", encoding = "UTF-8")
+fng_data <- fromJSON(content_json)
+
+# Convert the 'data' field to a data frame
+fng_df <- fng_data$data
+head(fng_df)
+
+fng_df$date <- as.POSIXct(as.numeric(fng_df$timestamp), origin = "1970-01-01", tz = "UTC")
+fng_df$value <- as.numeric(fng_df$value)
+
+fng_final <- fng_df[, c("date", "value")]
+names(fng_final) <- c("time", "FG")  # Rename for consistency
+head(fng_final)
+
+library(ggplot2)
+
+ggplot(fng_final, aes(x = time, y = FG)) +
+  geom_line(color = "steelblue") +
+  labs(
+    title = "CNN Fear & Greed Index Over Time",
+    x = "Date",
+    y = "Fear & Greed Index"
+  ) +
+  theme_minimal()
+
+nrow(fng_final)
+```
+ 
+```{r}
+
+# Define the start and end dates as POSIXct objects
+start_date <- as.POSIXct("2024-04-06", tz = "UTC")
+end_date   <- as.POSIXct("2025-04-06", tz = "UTC")
+
+# Subset the data
+fng_subset <- fng_final[fng_final$time >= start_date & fng_final$time <= end_date, ]
+
+# Check the first few rows of the subset
+head(fng_subset)
+
+# Plot the subsetted data
+library(ggplot2)
+ggplot(fng_subset, aes(x = time, y = FG)) +
+  geom_line(color = "steelblue") +
+  labs(
+    title = "CNN Fear & Greed Index (2024-04-06 to 2025-04-06)",
+    x = "Date",
+    y = "Fear & Greed Index"
+  ) +
+  theme_minimal()
+
+```
+
+After pre-processing, we have "merged_df" which contains date, FG index and bitcoin daily close prices ranging from 04/06/2024 to 04/05/2025. 
+
+```{r}
+# Read the bitcoin dataset (ensure strings are not converted to factors)
+bitcoin_ts <- read.csv('bitcoin_2024-04-06_2025-04-06.csv', stringsAsFactors = FALSE)
+
+# Convert the 'Start' column to a POSIXct date object 
+bitcoin_ts$Start <- as.POSIXct(bitcoin_ts$Start, format = "%Y-%m-%d", tz = "UTC")
+
+# Merge the F&G index dataset (fng_final) with the bitcoin dataset on matching dates
+merged_df <- merge(fng_final, bitcoin_ts, by.x = "time", by.y = "Start")
+
+# Select only the required columns and rename them:
+# "date" for the matching date, "fg_index" for the Fear & Greed Index, and "bitcoin_close" for the Bitcoin closing price.
+merged_df <- merged_df[, c("time", "FG", "Close")]
+names(merged_df) <- c("date", "fg_index", "bitcoin_close")
+
+# Check the first few rows of the merged data
+head(merged_df)
+
+```
+ 
+ 
+```{r}
+# First plot the FG Index with its y-axis (left)
+plot(merged_df$date, merged_df$fg_index, type = "l", col = "blue",
+     xlab = "Date", ylab = "FG Index", main = "FG Index and Bitcoin Price Over Time")
+
+# Overlay the Bitcoin closing price with a new plot
+par(new = TRUE)
+plot(merged_df$date, merged_df$bitcoin_close, type = "l", col = "red", 
+     axes = FALSE, xlab = "", ylab = "")
+# Add a right-side y-axis for Bitcoin
+axis(side = 4, col = "red", col.axis = "red")
+mtext("Bitcoin Close", side = 4, line = 3, col = "red")
+
+# Add a legend
+legend("topleft", legend = c("FG Index", "Bitcoin Close"), 
+       col = c("blue", "red"), lty = 1)
+
+
+```
+```{r}
+set.seed(1)
+
+# Assuming 'merged_df' is already available from your earlier code
+# with columns: date, fg_index, bitcoin_close
+# For consistency with your ETH example, rename columns to "Date" and "Price"
+bitcoin <- merged_df
+names(bitcoin) <- c("Date", "FG", "Price")
+
+# Convert the Date column to Date type (assuming it's in "YYYY-MM-DD" format)
+bitcoin$Date <- as.Date(bitcoin$Date)
+
+# Order the data by Date (if not already sorted)
+bitcoin <- bitcoin[order(bitcoin$Date), ]
+head(bitcoin)
+#
+```
+### Bitcoin Price Decomposition: Trend, Noise, Cycles
+```{r}
+library(zoo)
+
+# Convert Date to numeric for LOESS smoothing
+bitcoin_num <- as.numeric(bitcoin$Date)
+
+# Build each component as a zoo object
+B_btc    <- zoo(bitcoin$Price, bitcoin$Date)
+B_trend  <- zoo(loess(bitcoin$Price ~ bitcoin_num, span = 0.6)$fitted, bitcoin$Date)
+B_noise  <- zoo(bitcoin$Price - loess(bitcoin$Price ~ bitcoin_num, span = 0.07)$fitted, bitcoin$Date)
+B_cycles <- B_btc - B_trend - B_noise
+
+# Set up 4-row layout for plots
+par(mfrow = c(4, 1), mar = c(3, 4, 2, 2), oma = c(1, 1, 5, 1)) # Adjust plot margins
+
+# 1. Original Bitcoin Price
+plot(B_btc, main = "Bitcoin Price (Original)", xlab = "Date", ylab = "Price", col = "black")
+
+# 2. Trend component
+plot(B_trend, main = "Trend (LOESS, span = 0.6)", xlab = "Date", ylab = "Trend", col = "red")
+
+# 3. Noise component
+plot(B_noise, main = "Noise (LOESS Residual, span = 0.07)", xlab = "Date", ylab = "Noise", col = "blue")
+
+# 4. Cyclical component
+plot(B_cycles, main = "Cyclical Component", xlab = "Date", ylab = "Cycles", col = "green")
+mtext("Bitcoin Price Decomposition: Trend, Noise, Cycles", outer = TRUE, cex = 1.5, font = 2)
+```
+
+### FG index Decomposition: Trend, Noise, Cycles
+```{r}
+FG <- bitcoin$FG   # FG index from merged_df
+FG_date <- bitcoin$Date
+# Convert Date to numeric for LOESS smoothing
+fg_num <- as.numeric(FG_date)
+
+# Build zoo objects
+FG_index    <- zoo(FG, FG_date)
+FG_trend    <- zoo(loess(FG ~ fg_num, span = 0.6)$fitted, FG_date)
+FG_noise    <- zoo(FG - loess(FG ~ fg_num, span = 0.07)$fitted, FG_date)
+FG_cycles   <- FG_index - FG_trend - FG_noise
+
+# Plot layout: 4 stacked subplots + outer title
+par(mfrow = c(4, 1), mar = c(3, 4, 2, 2), oma = c(1, 1, 5, 1))
+
+plot(FG_index, main = "FG Index (Original)", xlab = "Date", ylab = "Index", col = "black")
+plot(FG_trend, main = "Trend (LOESS, span = 0.6)", xlab = "Date", ylab = "Trend", col = "red")
+plot(FG_noise, main = "Noise (LOESS Residual, span = 0.07)", xlab = "Date", ylab = "Noise", col = "blue")
+plot(FG_cycles, main = "Cyclical Component", xlab = "Date", ylab = "Cycles", col = "green")
+
+# Add overall title
+mtext("Fear & Greed Index Decomposition: Trend, Noise, Cycles", 
+      outer = TRUE, cex = 1.5, font = 2, line = 2)
+```
+
+### Smoothed Periodogram 
+```{r}
+# Bitcoin Price (from merged_df / bitcoin$Price)
+B_ind <- bitcoin$Price
+
+spectrum(B_ind,
+         spans = c(20, 20),
+         xlab = "Frequency - Cycles per Day",
+         main = "Bitcoin Daily Price - Smoothed Periodogram")
+
+# FG Index (from merged_df / bitcoin$FG)
+FG_ind <- bitcoin$FG
+
+spectrum(FG_ind,
+         spans = c(20, 20),
+         xlab = "Frequency - Cycles per Day",
+         main = "Fear & Greed Index - Smoothed Periodogram")
+```
+
+### Differencing and Log-transform
+```{r}
+# Compute the continuously compounded log returns and demean them
+log_returns <- diff(log(bitcoin$Price))
+logd <- log_returns - mean(log_returns)
+
+# Plot the Bitcoin Price over time
+par(mai=c(0.8,0.8,0.1,0.1))
+plot(bitcoin$Price ~ bitcoin$Date, type="l",
+     xlab="Years", ylab="Bitcoin ($)",
+     main="Bitcoin Price Over Time")
+
+# Plot the logarithmic transformation of Bitcoin Price
+plot(log(bitcoin$Price) ~ bitcoin$Date, type="l",
+     xlab="Years", ylab="Log(Bitcoin Price)",
+     main="Log-Transformed Bitcoin Price")
+
+# Plot the demeaned log returns of Bitcoin
+# (Note: diff reduces the length by one, so use Date[-1])
+plot(bitcoin$Date[-1], logd, type="l",
+     xlab="Years", ylab="Demeaned Log Return",
+     main="Demeaned Log Returns of Bitcoin")
+ 
+```
+
+### ACF of Bitcoin Price
+```{r}
+# Recalculate if needed
+bitcoin$log_price <- log(bitcoin$Price)
+log_returns <- diff(bitcoin$log_price)
+log_returns_demeaned <- log_returns - mean(log_returns)
+
+
+# ACF 1: Original price
+acf(bitcoin$Price, lag.max = 50, main = "ACF: Original Price")
+
+# ACF 2: Log(price)
+acf(bitcoin$log_price, lag.max = 50, main = "ACF: Log(Price)")
+
+# ACF 3: Differenced log(price)
+acf(log_returns, lag.max = 50, main = "ACF: Diff Log(Price)")
+
+# ACF 4: Demeaned log returns
+acf(log_returns_demeaned, lag.max = 50, main = "ACF: Demeaned Log Returns")
+
+# Shared title
+mtext("Figure X. ACF of Bitcoin Price: Original, Log, Differenced, Demeaned",
+      outer = TRUE, cex = 1.2, font = 2, line = 1)
+```
+
+### ACF of FG Index
+```{r}
+# Prepare FG Index (from merged_df / bitcoin$FG)
+FG_index <- bitcoin$FG
+FG_date <- bitcoin$Date
+
+# Log transform
+log_FG <- log(FG_index)
+
+# First difference of log
+diff_log_FG <- diff(log_FG)
+
+acf(FG_index, lag.max = 50, main = "ACF of Fear & Greed Index (Original)")
+acf(log_FG, lag.max = 50, main = "ACF of Log(Fear & Greed Index)")
+acf(diff_log_FG, lag.max = 50, main = "ACF of Differenced Log(FG Index)")
+```
+
+
+ 

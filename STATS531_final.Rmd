@@ -6,7 +6,6 @@ date: "2025-04-05"
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
-library(timeSeriesDataSets)
 ```
 
 # Dataset 
@@ -15,13 +14,14 @@ library(timeSeriesDataSets)
 - Bitcoin Close price
 
 ```{r}
+options(repos = c(CRAN = "https://cloud.r-project.org"))
 install.packages("httr")
 install.packages("jsonlite")
 library(httr)
 library(jsonlite)
 
 # Call the API
-response <- GET("https://api.alternative.me/fng/?limit=1000")
+response <- GET("https://api.alternative.me/fng/?limit=2000")
 
 # Parse JSON content
 content_json <- content(response, as = "text", encoding = "UTF-8")
@@ -55,7 +55,7 @@ nrow(fng_final)
 ```{r}
 
 # Define the start and end dates as POSIXct objects
-start_date <- as.POSIXct("2024-04-06", tz = "UTC")
+start_date <- as.POSIXct("2020-01-01", tz = "UTC")
 end_date   <- as.POSIXct("2025-04-06", tz = "UTC")
 
 # Subset the data
@@ -81,7 +81,7 @@ After pre-processing, we have "merged_df" which contains date, FG index and bitc
 
 ```{r}
 # Read the bitcoin dataset (ensure strings are not converted to factors)
-bitcoin_ts <- read.csv('bitcoin_2024-04-06_2025-04-06.csv', stringsAsFactors = FALSE)
+bitcoin_ts <- read.csv('bitcoin_2020-01-01_2025-04-06.csv', stringsAsFactors = FALSE)
 
 # Convert the 'Start' column to a POSIXct date object 
 bitcoin_ts$Start <- as.POSIXct(bitcoin_ts$Start, format = "%Y-%m-%d", tz = "UTC")
@@ -133,6 +133,24 @@ bitcoin$Date <- as.Date(bitcoin$Date)
 
 # Order the data by Date (if not already sorted)
 bitcoin <- bitcoin[order(bitcoin$Date), ]
+head(bitcoin)
+#
+```
+
+```{r}
+set.seed(1)
+
+# Assuming 'merged_df' is already available from your earlier code
+# with columns: date, fg_index, bitcoin_close
+# For consistency with your ETH example, rename columns to "Date" and "Price"
+bitcoin <- merged_df
+names(bitcoin) <- c("Date", "FG", "Price")
+
+# Convert the Date column to Date type (assuming it's in "YYYY-MM-DD" format)
+bitcoin$Date <- as.Date(bitcoin$Date)
+
+# Order the data by Date (if not already sorted)
+bitcoin <- bitcoin[order(bitcoin$Date), ]
 
 # Compute the continuously compounded log returns and demean them
 log_returns <- diff(log(bitcoin$Price))
@@ -156,4 +174,5 @@ plot(bitcoin$Date[-1], logd, type="l",
      main="Demeaned Log Returns of Bitcoin")
  
 ```
+
  

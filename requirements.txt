@@ -1,0 +1,7 @@
+R==4.4.1
+pomp==6.1
+knitr==1.50
+lubridate==1.9.4
+doParallel==1.0.17
+doRNG==1.8.6.1
+ggplot2==3.5.1
